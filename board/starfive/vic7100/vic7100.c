@@ -355,9 +355,6 @@ INIT_FUNC_DEF(i2sdac16k)
 INIT_FUNC_DEF(usb)
 {
     uint32_t read_v=MA_INW(gpioen_REG_ADDR + 0x48);
-    writel(0x7ffff, 0x10490000);
-    udelay(1000);
-    writel(0, 0x10490000);
 
     _ENABLE_CLOCK_clk_usb_axi_;
     _ENABLE_CLOCK_clk_usbphy_125m_;
