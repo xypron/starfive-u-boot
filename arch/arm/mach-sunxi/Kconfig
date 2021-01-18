@@ -578,7 +578,6 @@ config OLD_SUNXI_KERNEL_COMPAT
 
 config MACPWR
 	string "MAC power pin"
-	default ""
 	help
 	  Set the pin used to power the MAC. This takes a string in the format
 	  understood by sunxi_name_to_gpio, e.g. PH1 for pin 1 of port H.
@@ -969,7 +968,6 @@ endchoice
 
 config SATAPWR
 	string "SATA power pin"
-	default ""
 	help
 	  Set the pins used to power the SATA. This takes a string in the
 	  format understood by sunxi_name_to_gpio, e.g. PH1 for pin 1 of
