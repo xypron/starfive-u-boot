@@ -95,14 +95,82 @@ struct sifive_gpio_regs
 
 struct sifive_gpio_regs *g_aloe_gpio = (struct sifive_gpio_regs *) SIFIVE_BASE_GPIO;
 
-/*
-void _delay(unsigned int cycles)
-{
-    unsigned int i;
+#if defined(CONFIG_VIC_BEAGLE_V)
+static void *gpio_ctrl_base = NULL;
 
-    for(i = 0; i < cycles; i++);
+static void *get_gpio_ctrl_base(void)
+{
+	if (!gpio_ctrl_base) {
+		uint32_t function;
+		ulong FUNCTION_GPIO_CTRL_BASE[] = {
+			syscon_iopad_ctrl_register0_REG_ADDR,   //_SET_SYSCON_REG_register0_SCFG_gpio_pad_ctrl_0
+			syscon_iopad_ctrl_register0_REG_ADDR,   //_SET_SYSCON_REG_register0_SCFG_gpio_pad_ctrl_0
+			syscon_iopad_ctrl_register68_REG_ADDR,  //_SET_SYSCON_REG_register68_SCFG_funcshare_pad_ctrl_36
+			syscon_iopad_ctrl_register67_REG_ADDR,  //_SET_SYSCON_REG_register67_SCFG_funcshare_pad_ctrl_34
+			syscon_iopad_ctrl_register32_REG_ADDR,  //_SET_SYSCON_REG_register32_SCFG_funcshare_pad_ctrl_0
+			syscon_iopad_ctrl_register32_REG_ADDR,  //_SET_SYSCON_REG_register32_SCFG_funcshare_pad_ctrl_0
+			syscon_iopad_ctrl_register32_REG_ADDR,  //_SET_SYSCON_REG_register32_SCFG_funcshare_pad_ctrl_0
+		};
+
+		_GET_SYSCON_REG_register104_SCFG_io_padshare_sel(function);
+		gpio_ctrl_base = (void *)FUNCTION_GPIO_CTRL_BASE[function];
+		debug("function: %d, gpio_ctrl_base: %p\n", function, gpio_ctrl_base);
+	}
+	return gpio_ctrl_base;
 }
-*/
+void sys_set_gpio_iocfg(int pad, uint16_t val)
+{
+	ulong reg_n = (ulong)(pad >> 1);
+	void *reg_addr = get_gpio_ctrl_base() + (reg_n << 2);
+
+	uint32_t reg_val_old = readl(reg_addr);
+	uint32_t reg_val_new = reg_val_old;
+
+	if (pad & 1) {
+		reg_val_new &= ~(0xffff << 16);
+		reg_val_new |= (uint32_t)val << 16;
+	} else {
+		reg_val_new &= ~(0xffff << 0);
+		reg_val_new |= (uint32_t)val << 0;
+	}
+
+	if (reg_val_old != reg_val_new) {
+		debug("set gpio%d iocfg(@%p): %08x -> %08x\n", pad, reg_addr, reg_val_old, reg_val_new);
+		writel(reg_val_new, reg_addr);
+	}
+}
+
+uint16_t sys_get_gpio_iocfg(int pad)
+{
+	ulong reg_n = (ulong)(pad >> 1);
+	void *reg_addr = get_gpio_ctrl_base() + (reg_n << 2);
+	uint32_t reg_val = readl(reg_addr);
+	uint16_t iocfg = (reg_val >> ((pad & 1) ? 16 : 0)) & 0xffff;
+
+	return iocfg;
+}
+static void sys_funcshare_io_input_en(void)
+{
+	uint32_t function;
+
+	gpio_ctrl_base = 0;
+	_GET_SYSCON_REG_register104_SCFG_io_padshare_sel(function);
+	if (function != 0) {
+		const uint16_t IO_INPUT_EN = BIT(7)|BIT(6); /* [7]input_enable | [6]schemit_input_enable */
+		const int GPIO_NUM = 64;
+		uint16_t io_cfg;
+		int i;
+		for (i = 0; i < GPIO_NUM; i++) {
+			io_cfg = sys_get_gpio_iocfg(i);
+			if ((io_cfg & IO_INPUT_EN) != IO_INPUT_EN) {
+				debug("funcshare pad %d: input enable\n", i);
+				sys_set_gpio_iocfg(i, io_cfg|IO_INPUT_EN);
+			}
+		}
+	}
+}
+#endif
+
 /* end */
 INIT_FUNC_DEF(wave511)
 {
@@ -198,6 +266,25 @@ INIT_FUNC_DEF(gmac)
 
     _CLEAR_RESET_rstgen_rstn_gmac_ahb_;
 
+#if defined(CONFIG_VIC_BEAGLE_V)
+	_SET_SYSCON_REG_register89_SCFG_funcshare_pad_ctrl_57(0x00c30080);
+	_SET_SYSCON_REG_register90_SCFG_funcshare_pad_ctrl_58(0x00030080);
+
+	_SET_SYSCON_REG_register91_SCFG_funcshare_pad_ctrl_59(0x00030003);
+	_SET_SYSCON_REG_register92_SCFG_funcshare_pad_ctrl_60(0x00030003);
+	_SET_SYSCON_REG_register93_SCFG_funcshare_pad_ctrl_61(0x00030003);
+	_SET_SYSCON_REG_register94_SCFG_funcshare_pad_ctrl_62(0x00030003);
+
+	_SET_SYSCON_REG_register95_SCFG_funcshare_pad_ctrl_63(0x0c800003);
+
+	_SET_SYSCON_REG_register96_SCFG_funcshare_pad_ctrl_64(0x008000c0);
+	_SET_SYSCON_REG_register97_SCFG_funcshare_pad_ctrl_65(0x00c000c0);
+	_SET_SYSCON_REG_register98_SCFG_funcshare_pad_ctrl_66(0x00c000c0);
+	_SET_SYSCON_REG_register99_SCFG_funcshare_pad_ctrl_67(0x00c000c0);
+	_SET_SYSCON_REG_register100_SCFG_funcshare_pad_ctrl_68(0x00c000c0);
+	_SET_SYSCON_REG_register101_SCFG_funcshare_pad_ctrl_69(0x00c000c0);
+	_SET_SYSCON_REG_register102_SCFG_funcshare_pad_ctrl_70(0x00c000c0);
+#else
 	_SET_SYSCON_REG_register89_SCFG_funcshare_pad_ctrl_57(0x00030080);
 	_SET_SYSCON_REG_register90_SCFG_funcshare_pad_ctrl_58(0x00030080);
 
@@ -215,6 +302,7 @@ INIT_FUNC_DEF(gmac)
 	_SET_SYSCON_REG_register100_SCFG_funcshare_pad_ctrl_68(0x00800080);
 	_SET_SYSCON_REG_register101_SCFG_funcshare_pad_ctrl_69(0x00800080);
 	_SET_SYSCON_REG_register102_SCFG_funcshare_pad_ctrl_70(0x00800080);
+#endif
 
 #if defined(CONFIG_VIC_EVB_V1)
 	SET_GPIO_25_doen_LOW;
@@ -234,12 +322,9 @@ INIT_FUNC_DEF(gmac)
 
 	_SET_SYSCON_REG_register28_SCFG_gmac_phy_intf_sel(0x1);//rgmii
 
-//	_DIVIDE_CLOCK_clk_gmac_gtxclk_(20); //100M clk
-
 	_DIVIDE_CLOCK_clk_gmac_gtxclk_(4); //1000M clk
 
 	_SET_SYSCON_REG_register49_SCFG_gmac_gtxclk_dlychain_sel(0x4);
-	_SET_SYSCON_REG_register104_SCFG_io_padshare_sel(0);
 }
 
 
@@ -354,7 +439,9 @@ INIT_FUNC_DEF(i2sdac16k)
 
 INIT_FUNC_DEF(usb)
 {
+#if !defined(CONFIG_VIC_BEAGLE_V)
     uint32_t read_v=MA_INW(gpioen_REG_ADDR + 0x48);
+#endif
 
     _ENABLE_CLOCK_clk_usb_axi_;
     _ENABLE_CLOCK_clk_usbphy_125m_;
@@ -371,17 +458,27 @@ INIT_FUNC_DEF(usb)
     /* for host */
     SET_GPIO_usb_over_current(-1);
 
+#if defined(CONFIG_VIC_BEAGLE_V)
+	/* config strap */
+	_SET_SYSCON_REG_SCFG_usb0_mode_strap(0x2);
+	_SET_SYSCON_REG_SCFG_usb7_PLL_EN(0x1);
+	_SET_SYSCON_REG_SCFG_usb7_U3_EQ_EN(0x1);
+	_SET_SYSCON_REG_SCFG_usb7_U3_SSRX_SEL(0x1);
+	_SET_SYSCON_REG_SCFG_usb7_U3_SSTX_SEL(0x1);
+	_SET_SYSCON_REG_SCFG_usb3_utmi_iddig(0x1);
+#else
     if(!((read_v >> 22) & 0x1)) {
         /* config strap */
         _SET_SYSCON_REG_SCFG_usb0_mode_strap(0x2);
         _SET_SYSCON_REG_SCFG_usb7_PLL_EN(0x1);
-        //_SET_SYSCON_REG_SCFG_usb7_U3_HOST_PYH(0x1);
+
         _SET_SYSCON_REG_SCFG_usb7_U3_EQ_EN(0x1);
-        //    _SET_SYSCON_REG_SCFG_usb7_U3_SSCG_ON(0x1);
         _SET_SYSCON_REG_SCFG_usb7_U3_SSRX_SEL(0x1);
         _SET_SYSCON_REG_SCFG_usb7_U3_SSTX_SEL(0x1);
+
         _SET_SYSCON_REG_SCFG_usb3_utmi_iddig(0x1);
     }
+#endif
 }
 
 INIT_FUNC_DEF(sgdma1p)
@@ -416,6 +513,98 @@ INIT_FUNC_DEF(sgdma2p)
 
 INIT_FUNC_DEF(sdio0)
 {
+#if defined(CONFIG_VIC_BEAGLE_V)
+    _ENABLE_CLOCK_clk_sdio0_ahb_;
+    _ENABLE_CLOCK_clk_sdio0_cclkint_;
+
+    _CLEAR_RESET_rstgen_rstn_sdio0_ahb_;
+
+	SET_GPIO_sdio0_pad_card_detect_n(55);
+	SET_GPIO_55_doen_HIGH;
+
+	SET_GPIO_54_dout_sdio0_pad_cclk_out;
+	SET_GPIO_54_doen_LOW;
+
+	SET_GPIO_53_doen_reverse_(1);
+	SET_GPIO_53_doen_sdio0_pad_ccmd_oe;
+	SET_GPIO_53_dout_sdio0_pad_ccmd_out;
+	SET_GPIO_sdio0_pad_ccmd_in(53);
+
+    _SET_SYSCON_REG_register58_SCFG_funcshare_pad_ctrl_26(0x00c000c0);
+
+	SET_GPIO_49_doen_reverse_(1);
+	SET_GPIO_50_doen_reverse_(1);
+	SET_GPIO_51_doen_reverse_(1);
+	SET_GPIO_52_doen_reverse_(1);
+
+	SET_GPIO_49_doen_sdio0_pad_cdata_oe_bit0;
+	SET_GPIO_49_dout_sdio0_pad_cdata_out_bit0;
+	SET_GPIO_sdio0_pad_cdata_in_bit0(49);
+    _SET_SYSCON_REG_register56_SCFG_funcshare_pad_ctrl_24(0x00c000c0);
+
+	SET_GPIO_50_doen_sdio0_pad_cdata_oe_bit1;
+	SET_GPIO_50_dout_sdio0_pad_cdata_out_bit1;
+	SET_GPIO_sdio0_pad_cdata_in_bit1(50);
+
+	SET_GPIO_51_doen_sdio0_pad_cdata_oe_bit2;
+	SET_GPIO_51_dout_sdio0_pad_cdata_out_bit2;
+	SET_GPIO_sdio0_pad_cdata_in_bit2(51);
+
+    _SET_SYSCON_REG_register57_SCFG_funcshare_pad_ctrl_25(0x00c000c0);
+
+	SET_GPIO_52_doen_sdio0_pad_cdata_oe_bit3;
+	SET_GPIO_52_dout_sdio0_pad_cdata_out_bit3;
+	SET_GPIO_sdio0_pad_cdata_in_bit3(52);
+    _SET_SYSCON_REG_register58_SCFG_funcshare_pad_ctrl_26(0x00c000c0);
+
+#if 0//wifi module
+	SET_GPIO_sdio0_pad_card_detect_n(55);
+	SET_GPIO_55_doen_HIGH;
+
+	SET_GPIO_33_dout_sdio0_pad_cclk_out;
+	SET_GPIO_33_doen_LOW;
+
+	SET_GPIO_29_doen_reverse_(1);
+	SET_GPIO_29_doen_sdio0_pad_ccmd_oe;
+	SET_GPIO_29_dout_sdio0_pad_ccmd_out;
+	SET_GPIO_sdio0_pad_ccmd_in(29);
+
+
+	SET_GPIO_36_doen_reverse_(1);
+	SET_GPIO_30_doen_reverse_(1);
+	SET_GPIO_34_doen_reverse_(1);
+	SET_GPIO_31_doen_reverse_(1);
+
+	SET_GPIO_36_doen_sdio0_pad_cdata_oe_bit0;
+	SET_GPIO_36_dout_sdio0_pad_cdata_out_bit0;
+	SET_GPIO_sdio0_pad_cdata_in_bit0(36);
+
+
+	SET_GPIO_30_doen_sdio0_pad_cdata_oe_bit1;
+	SET_GPIO_30_dout_sdio0_pad_cdata_out_bit1;
+	SET_GPIO_sdio0_pad_cdata_in_bit1(30);
+
+	SET_GPIO_34_doen_sdio0_pad_cdata_oe_bit2;
+	SET_GPIO_34_dout_sdio0_pad_cdata_out_bit2;
+	SET_GPIO_sdio0_pad_cdata_in_bit2(34);
+
+
+
+	SET_GPIO_31_doen_sdio0_pad_cdata_oe_bit3;
+	SET_GPIO_31_dout_sdio0_pad_cdata_out_bit3;
+	SET_GPIO_sdio0_pad_cdata_in_bit3(31);
+
+
+
+    SET_GPIO_37_doen_LOW;
+    SET_GPIO_37_dout_HIGH;
+    udelay(5000);
+    SET_GPIO_37_dout_LOW;
+    udelay(5000);
+    SET_GPIO_37_dout_HIGH;
+#endif
+
+#else
 	SET_GPIO_sdio0_pad_card_detect_n(26);
 	SET_GPIO_26_doen_HIGH;
 
@@ -447,6 +636,7 @@ INIT_FUNC_DEF(sdio0)
 	SET_GPIO_36_doen_sdio0_pad_cdata_oe_bit3;
 	SET_GPIO_36_dout_sdio0_pad_cdata_out_bit3;
 	SET_GPIO_sdio0_pad_cdata_in_bit3(36);
+#endif
 }
 
 INIT_FUNC_DEF(sdio1)
@@ -455,6 +645,37 @@ INIT_FUNC_DEF(sdio1)
     _ENABLE_CLOCK_clk_sdio1_cclkint_;
 
     _CLEAR_RESET_rstgen_rstn_sdio1_ahb_;
+
+#if defined(CONFIG_VIC_BEAGLE_V)
+	SET_GPIO_33_dout_sdio1_pad_cclk_out;
+	SET_GPIO_33_doen_LOW;
+
+	SET_GPIO_29_doen_reverse_(1);
+	SET_GPIO_29_doen_sdio1_pad_ccmd_oe;
+	SET_GPIO_29_dout_sdio1_pad_ccmd_out;
+	SET_GPIO_sdio1_pad_ccmd_in(29);
+
+	SET_GPIO_36_doen_reverse_(1);
+	SET_GPIO_30_doen_reverse_(1);
+	SET_GPIO_34_doen_reverse_(1);
+	SET_GPIO_31_doen_reverse_(1);
+
+	SET_GPIO_36_doen_sdio1_pad_cdata_oe_bit0;
+	SET_GPIO_36_dout_sdio1_pad_cdata_out_bit0;
+	SET_GPIO_sdio1_pad_cdata_in_bit0(36);
+
+	SET_GPIO_30_doen_sdio1_pad_cdata_oe_bit1;
+	SET_GPIO_30_dout_sdio1_pad_cdata_out_bit1;
+	SET_GPIO_sdio1_pad_cdata_in_bit1(30);
+
+	SET_GPIO_34_doen_sdio1_pad_cdata_oe_bit2;
+	SET_GPIO_34_dout_sdio1_pad_cdata_out_bit2;
+	SET_GPIO_sdio1_pad_cdata_in_bit2(34);
+
+	SET_GPIO_31_doen_sdio1_pad_cdata_oe_bit3;
+	SET_GPIO_31_dout_sdio1_pad_cdata_out_bit3;
+	SET_GPIO_sdio1_pad_cdata_in_bit3(31);
+#endif
 }
 
 INIT_FUNC_DEF(spi2ahb)
@@ -739,6 +960,9 @@ INIT_FUNC_DEF(dsitx)
 /*init system GPIO*/
 int board_hw_init(void)
 {
+#if defined(CONFIG_VIC_BEAGLE_V)
+	sys_funcshare_io_input_en();
+#endif
 	INIT_FUNC_CALL(wave511);
 	INIT_FUNC_CALL(gc300);
 	INIT_FUNC_CALL(codaj21);
