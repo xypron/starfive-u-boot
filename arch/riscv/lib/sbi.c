@@ -8,13 +8,14 @@
  */
 
 #include <common.h>
+#include <efi_loader.h>
 #include <asm/encoding.h>
 #include <asm/sbi.h>
 
-struct sbiret sbi_ecall(int ext, int fid, unsigned long arg0,
-			unsigned long arg1, unsigned long arg2,
-			unsigned long arg3, unsigned long arg4,
-			unsigned long arg5)
+struct sbiret __efi_runtime sbi_ecall(int ext, int fid, unsigned long arg0,
+				      unsigned long arg1, unsigned long arg2,
+				      unsigned long arg3, unsigned long arg4,
+				      unsigned long arg5)
 {
 	struct sbiret ret;
 
@@ -106,6 +107,18 @@ int sbi_probe_extension(int extid)
 			return ret.value;
 
 	return -ENOTSUPP;
+}
+
+/**
+ * sbi_srst_reset() - invoke system reset extension
+ *
+ * @type:	type of reset
+ * @reason:	reason for reset
+ */
+void __efi_runtime sbi_srst_reset(unsigned long type, unsigned long reason)
+{
+	sbi_ecall(SBI_EXT_SRST, SBI_EXT_SRST_RESET, type, reason,
+		  0, 0, 0, 0);
 }
 
 #ifdef CONFIG_SBI_V01
