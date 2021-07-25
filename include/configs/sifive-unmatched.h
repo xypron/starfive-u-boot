@@ -67,13 +67,14 @@
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	"fdt_high=0xffffffffffffffff\0" \
 	"initrd_high=0xffffffffffffffff\0" \
-	"kernel_addr_r=0x84000000\0" \
-	"fdt_addr_r=0x88000000\0" \
-	"scriptaddr=0x88100000\0" \
-	"pxefile_addr_r=0x88200000\0" \
-	"ramdisk_addr_r=0x88300000\0" \
-	"kernel_comp_addr_r=0x90000000\0" \
-	"kernel_comp_size=0x4000000\0" \
+	"fdt_addr_r=0x84000000\0" \
+	"scriptaddr=0x84100000\0" \
+	"pxefile_addr_r=0x84200000\0" \
+	"kernel_addr_r=0x85000000\0" \
+	"loadaddr=0x85000000\0" \
+	"kernel_comp_addr_r=0x8b000000\0" \
+	"kernel_comp_size=0x05000000\0" \
+	"ramdisk_addr_r=0x90000000\0" \
 	"type_guid_gpt_loader1=" TYPE_GUID_LOADER1 "\0" \
 	"type_guid_gpt_loader2=" TYPE_GUID_LOADER2 "\0" \
 	"type_guid_gpt_system=" TYPE_GUID_SYSTEM "\0" \
